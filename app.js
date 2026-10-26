@@ -1,6 +1,6 @@
 'use strict';
 const $=s=>document.querySelector(s), esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let pending=false,last=null,selected=null;
+let pending=false,last=null,selected=null,busyButtons=new Map(),statusReading=false,statusRetry=0;
 const nice=x=>String(x??'').replace(/§./g,'').replace(/^minecraft:/,'').replaceAll('_',' ');
 const bytes=n=>n>=1073741824?(n/1073741824).toFixed(1)+' GB':(n/1048576).toFixed(1)+' MB';
 const when=x=>new Date(x).toLocaleString('pt-BR');
@@ -15,7 +15,7 @@ async function rpc(req){
  if(!res.ok)throw Error(res.error||'Operação não concluída.');return res.result;
 }
 function notice(text,error=false){$('#notice').hidden=false;$('#notice').textContent=text;$('#notice').classList.toggle('error',error);}
-function busy(on){pending=on;$('#busy').hidden=!on;document.querySelectorAll('button').forEach(b=>b.disabled=on);$('#install').disabled=on||!selected;}
+function busy(on){pending=on;$('#busy').hidden=!on;if(on){busyButtons=new Map([...document.querySelectorAll('button')].map(b=>[b,b.disabled]));busyButtons.forEach((_,b)=>b.disabled=true);}else{busyButtons.forEach((disabled,b)=>{if(b.isConnected)b.disabled=disabled;});busyButtons.clear();}$('#install').disabled=on||!selected;}
 function confirmAction(title,body){return new Promise(resolve=>{const d=$('#confirm-dialog');$('#confirm-title').textContent=title;$('#confirm-body').textContent=body;d.returnValue='cancel';d.onclose=()=>resolve(d.returnValue==='yes');d.showModal();});}
 function metric(label,value,note){return `<div class="metric"><label>${esc(label)}</label><strong>${esc(value)}</strong><small>${esc(note)}</small></div>`;}
 function render(s){
@@ -46,7 +46,7 @@ function player(p){
  const pos=p.position?`${p.position.x}, ${p.position.y}, ${p.position.z}`:'indisponível';
  return `<article class="player" data-player="${esc(p.name)}"><div class="player-head"><div class="player-name">♙ ${esc(p.name)}</div><span class="tag">${esc(nice(p.dimension))}</span></div><div class="vitals"><span>♥ Vida: ${esc(p.health?.current??'—')} / ${esc(p.health?.max??'—')}</span><span>♨ Fome: ${esc(p.hunger?.current??'indisponível')} / ${esc(p.hunger?.max??'—')}</span><span>⌖ ${esc(pos)}</span><span>${esc(nice(p.gamemode))}</span></div>${p.error?`<p class="hint warn">Leitura parcial: ${esc(p.error)}</p>`:''}<details><summary>Ver inventário · ${(p.inventory||[]).length} slots ocupados</summary><div class="inventory">${slots}</div><p class="hint">Equipamento: ${esc((p.equipment||[]).map(x=>x.slot+': '+nice(x.type)).join(' · ')||'nenhum')}</p><p class="hint">Passe o cursor sobre um item para consultar durabilidade e encantamentos disponíveis.</p></details></article>`;
 }
-async function refresh(){if(pending)return;try{render(await rpc({action:'status'}));}catch(e){$('#fresh').textContent='Falha na leitura — '+e.message;}}
+async function refresh(){if(pending||statusReading)return;statusReading=true;try{render(await rpc({action:'status'}));statusRetry=0;}catch(e){if(e.message.includes('Outra operação')){$('#fresh').textContent='Outra leitura ou manutenção em andamento. Aguardando o servidor…';if(statusRetry++<3)setTimeout(refresh,1500);}else $('#fresh').textContent='Falha na leitura — '+e.message;}finally{statusReading=false;}}
 async function operate(req,title,body){
  if(pending||!await confirmAction(title,body))return;
  busy(true);try{const result=await rpc(req);notice(result.message||'Operação concluída.');}catch(e){notice(e.message,true);}finally{busy(false);await refresh();}

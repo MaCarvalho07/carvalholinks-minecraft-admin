@@ -3,6 +3,9 @@ if sys.platform=='win32':sys.modules['fcntl']=types.SimpleNamespace()
 spec=importlib.util.spec_from_file_location('admin',pathlib.Path(__file__).with_name('admin.py'));a=importlib.util.module_from_spec(spec);spec.loader.exec_module(a)
 
 class SafetyTests(unittest.TestCase):
+ def test_future_engine(self):
+  with self.assertRaises(ValueError):a.validate_engine([dict(name='Future',min_engine=[1,27,0])],'1.26.52.3')
+  a.validate_engine([dict(name='Current',min_engine=[1,26,0])],'1.26.52.3')
  def archive(self,files):
   b=io.BytesIO()
   with zipfile.ZipFile(b,'w') as z:

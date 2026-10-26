@@ -10,18 +10,19 @@ This repository contains the first working version of the dashboard and its read
 - Start, stop, and restart controls for an existing Docker container.
 - Online players, health, hunger, position, dimension, and game mode.
 - Read-only inventory and equipment inspection, including available durability and enchantment information.
-- Local `.mcaddon` and `.mcpack` uploads, pack activation, and dependency checks.
+- Local `.mcaddon` and `.mcpack` uploads, pack activation, dependency checks, and minimum-engine version validation.
+- CurseForge catalog UI with search, categories, author attribution, project cards, paginated files, server-side downloads, and installation (API key required).
 - Offline, consistent backups before add-on changes and restores, with SHA-256 verification.
 - Backup download and restoration, retaining the current server runtime version.
 - Local operation audit log and explicit confirmation dialogs for world-changing actions.
 
-## Planned CurseForge integration
+## CurseForge integration — implementation ready, credentials pending
 
-**The CurseForge integration is planned and is not implemented in this version. API access is being requested.**
+**The API client and interface are implemented. API access is being requested; live authenticated catalog and download checks are pending key approval.**
 
-The intended integration would allow the administrator to search Minecraft Bedrock add-ons and resource packs, inspect author and project details, review available versions, and download author-authorized files for installation on the administrator's own server.
+The integration allows the administrator to search Minecraft Bedrock add-ons and resource packs, inspect author and project details, review available versions, and download author-authorized files for installation on the administrator's own server. Before a key is configured, the interface explicitly shows a small local selection of official project links, rather than presenting it as live API search results.
 
-The project is not intended to mirror the CurseForge catalog or operate a public file redistribution service. The planned integration will preserve author attribution and links to original project pages, respect third-party distribution permissions, and use official authorized download mechanisms. If a project does not permit third-party downloads, the administrator will be directed to its official page. No API key is included in this repository.
+The project is not intended to mirror the CurseForge catalog or operate a public file redistribution service. The integration preserves author attribution and links to original project pages, respects third-party distribution permissions, and uses official authorized download mechanisms. If a project does not permit third-party downloads, the administrator is directed to its official page. No API key is included in this repository. See [CURSEFORGE.md](CURSEFORGE.md) for setup and verification limits.
 
 Supported game: **Minecraft: Bedrock Edition**. Minecraft Java Edition, Forge `.jar` mods, and commercial distribution are outside the current scope.
 
@@ -56,6 +57,11 @@ The backend has no HTTP listener. Public monitoring and administrative controls 
 | `bridge.js` | Read-only Bedrock Script API telemetry |
 | `bridge-manifest.json` | Manifest for the Bedrock behavior pack |
 | `test_admin.py` | Safety, archive, telemetry, backup, and restoration tests |
+| `curseforge.py` | Host-side official API client, restricted CDN download, checksum validation |
+| `catalog.js`, `catalog.css` | Catalog interface and file selection dialog |
+| `catalog.html`, `catalog-dialog.html` | Source fragments already assembled into `index.html` |
+| `build_catalog.py` | Reassemble the catalog fragments after changing their markup |
+| `test_curseforge.py` | Mocked API contract, permission, checksum, redirect, and credential handling tests |
 
 ## Deployment notes
 
@@ -80,10 +86,13 @@ Open `/minecraftadmin` in the authenticated Cockpit session. Use the local netwo
 Run:
 
 ```sh
-python3 test_admin.py
+python3 -m unittest discover -p 'test_*.py'
 node --check app.js
 node --check bridge.js
+node --check catalog.js
 ```
+
+After editing catalog markup fragments, run `python3 build_catalog.py` before deploying `index.html`. This buildless UI uses the host's Cockpit JavaScript API and needs no npm dependencies.
 
 The test suite covers ZIP path traversal, symbolic links, invalid archives, nested add-on archives, missing script entry points, pack dependencies, stale telemetry, backup checksums, and restoration into a temporary directory while preserving the runtime configuration.
 

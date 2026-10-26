@@ -164,7 +164,9 @@ def validate_stage(stage):
                 if not target.is_relative_to(f.parent.resolve()) or not target.is_file():raise ValueError('Entrada do script ausente ou insegura')
         if uid==BRIDGE:raise ValueError('Integração administrativa protegida')
         f.write_text(json.dumps(m,ensure_ascii=False,indent=2))
-        found.append(dict(uuid=uid,name=h.get('name',uid),version=version,kind=kind,dependencies=m.get('dependencies',[]),source=f.parent))
+        engine=h.get('min_engine_version',[])
+        if engine and (not isinstance(engine,list) or len(engine)!=3 or not all(type(v)==int and v>=0 for v in engine)):raise ValueError('Versão mínima do motor inválida')
+        found.append(dict(uuid=uid,name=h.get('name',uid),version=version,kind=kind,dependencies=m.get('dependencies',[]),min_engine=engine,source=f.parent))
     if not found:raise ValueError('Nenhum pacote Bedrock válido encontrado')
     if len(found)>20:raise ValueError('Máximo de 20 packs por envio')
     # Parent and child manifests must never overlap.
@@ -177,6 +179,13 @@ def validate_refs(candidate):
     for p in active.values():
         for dep in p['dependencies']:
             if 'uuid' in dep and (dep['uuid'] not in active or active[dep['uuid']]['version']!=dep['version']):raise ValueError('Dependência ausente/inativa: '+p['name']+' → '+dep['uuid'])
+
+def validate_engine(candidate,version):
+    if not any(p.get('min_engine') for p in candidate):return
+    if not re.fullmatch(r'\d+\.\d+\.\d+(\.\d+)?',version):raise ValueError('Não foi possível confirmar a versão do servidor para validar estes packs')
+    current=tuple(int(v) for v in version.split('.')[:3])
+    for p in candidate:
+        if p.get('min_engine') and tuple(p['min_engine'])>current:raise ValueError('O pacote '+p['name']+' exige Bedrock '+'.'.join(map(str,p['min_engine']))+' ou superior')
 
 def audit(action,ok,detail):
     STATE.mkdir(exist_ok=True)
@@ -212,6 +221,8 @@ def mutate(req):
         if not blob or len(blob)>LIMIT:raise ValueError('Limite de upload: 16 MB')
         with tempfile.TemporaryDirectory(prefix='carv-addon-') as temp:
             stage=pathlib.Path(temp);budget[0]=0;unpack(blob,stage);found=validate_stage(stage)
+            version=next((v.split('=',1)[1] for v in inspect()['Config'].get('Env',[]) if v.startswith('VERSION=')),'unknown')
+            validate_engine(found,version)
             current=packs(); newids={p['uuid'] for p in found}
             # Updates are explicit installs; archives are preserved by the backup.
             candidate=[p for p in current if p['uuid'] not in newids]+[dict(p,active=True) for p in found]
@@ -273,9 +284,19 @@ def restore_files(name):
 budget=[0]
 def main():
     STATE.mkdir(parents=True,exist_ok=True)
+    raw=sys.stdin.read(24*1024*1024);req=json.loads(raw);action=req.get('action')
+    # Catalog reads never hold the world-maintenance lock during network calls.
+    if isinstance(action,str) and action.startswith('cf_') and action!='cf_install':
+        import curseforge
+        try:
+            value=curseforge.handle(req,sys.modules[__name__])
+            if action=='cf_download':audit(action,True,'Projeto '+str(req.get('projectId'))+'; arquivos '+str(req.get('fileIds')))
+        except Exception as e:
+            if action=='cf_download':audit(action,False,str(e))
+            raise
+        print(json.dumps(dict(ok=True,result=value),ensure_ascii=False));return
     with (STATE/'operations.lock').open('a') as lock:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-        raw=sys.stdin.read(24*1024*1024);req=json.loads(raw);action=req.get('action')
         if action=='status':
             value=status()
             # Only expose selected values; container environment can contain credentials.
@@ -284,6 +305,14 @@ def main():
             a=checked_backup(req.get('id',''))
             if a.stat().st_size>64*1024*1024:raise ValueError('Backup maior que 64 MB: baixe pelo terminal/Cockpit')
             value=dict(data=base64.b64encode(a.read_bytes()).decode(),filename=a.parent.name+'.tar.gz')
+        elif isinstance(action,str) and action.startswith('cf_'):
+            import curseforge
+            try:
+                value=curseforge.handle(req,sys.modules[__name__])
+                if action in ('cf_install','cf_download'):audit(action,True,'Projeto '+str(req.get('projectId'))+'; arquivos '+str(req.get('fileIds')))
+            except Exception as e:
+                if action in ('cf_install','cf_download'):audit(action,False,str(e))
+                raise
         else:
             try:value=mutate(req);audit(action,True,value.get('message',''))
             except Exception as e:audit(action,False,str(e));raise

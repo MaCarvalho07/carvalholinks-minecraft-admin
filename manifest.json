@@ -1,1 +1,1 @@
-{"version":1,"tools":{"index":{"label":"Minecraft Admin","path":"index.html","order":10}}}
+{"version":2,"content-security-policy":"img-src 'self' data: https://media.forgecdn.net https://mediafilez.forgecdn.net;","tools":{"index":{"label":"Minecraft Admin","path":"index.html","order":10}}}
