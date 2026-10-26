@@ -1,0 +1,22 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "CarvalhoLinks Admin Bridge",
+    "description": "Read-only local player telemetry for the authenticated CarvalhoLinks Minecraft Admin dashboard.",
+    "uuid": "89140f53-6fdc-43cd-8b5c-a5d51f824e80",
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 26, 0]
+  },
+  "modules": [
+    {
+      "type": "script",
+      "language": "javascript",
+      "uuid": "ee04ddf6-08ba-4eb0-a606-99633790f3ab",
+      "version": [1, 0, 0],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    {"module_name": "@minecraft/server", "version": "2.8.0"}
+  ]
+}
