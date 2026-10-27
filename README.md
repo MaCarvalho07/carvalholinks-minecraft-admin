@@ -7,6 +7,7 @@ This repository contains the first working version of the dashboard and its read
 ## Current features
 
 - Server state, health, CPU, memory, available disk space, and estimated tick rate (TPS).
+- Private performance history: 15-second collection, 30-day retention, period filters, interactive charts, active-player TPS dip records, and CSV export. Collection continues without an open browser.
 - Start, stop, and restart controls for an existing Docker container.
 - Online players, health, hunger, position, dimension, and game mode.
 - Read-only inventory and equipment inspection, including available durability and enchantment information.
@@ -62,6 +63,10 @@ The backend has no HTTP listener. Public monitoring and administrative controls 
 | `catalog.html`, `catalog-dialog.html` | Source fragments already assembled into `index.html` |
 | `build_catalog.py` | Reassemble the catalog fragments after changing their markup |
 | `test_curseforge.py` | Mocked API contract, permission, checksum, redirect, and credential handling tests |
+| `history.py` | Numeric telemetry collection, private SQLite storage, retention, aggregation, and CSV export |
+| `history.js`, `history.css`, `history.html` | Interactive performance timeline; HTML already assembled into `index.html` |
+| `build_history.py` | Reassemble the history markup after editing it |
+| `test_history.py`, `test_history_frontend.js` | History integrity, retention, privacy, missing readings, and chart-gap checks |
 
 ## Deployment notes
 
@@ -90,9 +95,13 @@ python3 -m unittest discover -p 'test_*.py'
 node --check app.js
 node --check bridge.js
 node --check catalog.js
+node --check history.js
+node test_history_frontend.js
 ```
 
 After editing catalog markup fragments, run `python3 build_catalog.py` before deploying `index.html`. This buildless UI uses the host's Cockpit JavaScript API and needs no npm dependencies.
+
+After editing history markup, run `python3 build_history.py`. See [PERFORMANCE.md](PERFORMANCE.md) for collection scheduling, metrics, and retention. Install the collector separately from the browser UI; opening a dashboard is not what creates history samples.
 
 The test suite covers ZIP path traversal, symbolic links, invalid archives, nested add-on archives, missing script entry points, pack dependencies, stale telemetry, backup checksums, and restoration into a temporary directory while preserving the runtime configuration.
 

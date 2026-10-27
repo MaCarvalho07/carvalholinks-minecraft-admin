@@ -16,6 +16,9 @@ backups/
 admin-state/
 *.log
 *.jsonl
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
 *.zip
 *.mcaddon
 *.mcpack

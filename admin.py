@@ -313,6 +313,10 @@ budget=[0]
 def main():
     STATE.mkdir(parents=True,exist_ok=True)
     raw=sys.stdin.read(24*1024*1024);req=json.loads(raw);action=req.get('action')
+    if action in ('history','history_export'):
+        import history
+        value=history.history(req.get('period','1h')) if action=='history' else history.export(req.get('period','1h'))
+        print(json.dumps(dict(ok=True,result=value),ensure_ascii=False));return
     # Catalog reads never hold the world-maintenance lock during network calls.
     if isinstance(action,str) and action.startswith('cf_') and action!='cf_install':
         import curseforge

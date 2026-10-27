@@ -1,0 +1,44 @@
+'use strict';
+let historyPeriod='1h',historyData=null,historyLoading=false,historyCursor=0;
+const historyGeometry={W:480,H:180,L:48,R:14,T:16,B:32};
+const historyTime=t=>new Date(t*1000).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+const historyNumber=(v,d=1)=>Number.isFinite(v)?v.toLocaleString('pt-BR',{maximumFractionDigits:d}):'—';
+const historyMem=v=>Number.isFinite(v)?v>=1024?historyNumber(v/1024)+' GiB':historyNumber(v)+' MiB':'—';
+function historyMetric(title,value,note){return `<div class="metric"><label>${esc(title)}</label><strong>${esc(value)}</strong><small>${esc(note)}</small></div>`;}
+function historyPath(points,key,x,y,gap){let path='',previous=null;for(const p of points){const value=p[key];if(!Number.isFinite(value)){previous=null;continue;}const move=previous===null||p.ts-previous>gap;path+=(move?'M':'L')+x(p.ts).toFixed(2)+','+y(value).toFixed(2)+' ';previous=p.ts;}return path;}
+function historyChart(config){
+ const data=historyData,points=data.points,{W,H,L,R,T,B}=historyGeometry;
+ const start=points[0]?.ts??data.fromTs,span=Math.max(1,data.toTs-start),x=t=>L+(t-start)/span*(W-L-R);
+ let top=config.max;
+ if(!top){const values=points.map(p=>p[config.key]).filter(Number.isFinite);top=Math.max(config.minimum,...values);if(config.peak)top=Math.max(top,...points.map(p=>p[config.peak]).filter(Number.isFinite));if(config.key==='memory')top=Math.max(top,...points.map(p=>p.memoryLimit).filter(Number.isFinite));top=config.key==='cpu'?Math.ceil(top/100)*100:Math.ceil(top);}
+ const y=v=>H-B-v/top*(H-B-T),color=config.color;
+ let grid='';for(let i=0;i<=4;i++){const value=top*i/4,yy=y(value);grid+=`<line class="grid" x1="${L}" x2="${W-R}" y1="${yy}" y2="${yy}"/><text text-anchor="end" x="${L-8}" y="${yy+4}">${esc(config.format(value))}</text>`;}
+ for(let i=0;i<=2;i++){const t=start+span*i/2;grid+=`<text x="${x(t)}" y="${H-10}" text-anchor="${i===0?'start':i===2?'end':'middle'}">${esc(new Date(t*1000).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}))}</text>`;}
+ const valid=points.filter(p=>Number.isFinite(p[config.key])),gap=data.bucketSeconds*1.5;
+ const threshold=config.key==='tps'?`<line class="threshold" x1="${L}" x2="${W-R}" y1="${y(18)}" y2="${y(18)}"/>`:'';
+ const dot=valid.map(p=>`<circle class="sample-dot" cx="${x(p.ts)}" cy="${y(p[config.key])}" r="${valid.length<10?3.5:1.5}" fill="${color}"/>`).join('');
+ return `<article class="panel history-chart" data-history-chart="${esc(config.key)}"><header><h3>${esc(config.title)}</h3><small>${esc(config.note)}</small></header><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(config.title+' no período selecionado')}">${grid}${threshold}${config.peak?`<path class="peak" d="${historyPath(points,config.peak,x,y,gap)}"/>`:''}<path class="series" stroke="${color}" d="${historyPath(points,config.key,x,y,gap)}"/>${dot}<line class="history-mark" x1="${L}" x2="${L}" y1="${T}" y2="${H-B}" visibility="hidden"/>${valid.length?'':`<text class="chart-empty" x="${W/2}" y="${H/2}" text-anchor="middle">Sem medições disponíveis neste período</text>`}</svg></article>`;
+}
+function historyInspect(index){
+ if(!historyData?.points.length)return;historyCursor=Math.max(0,Math.min(index,historyData.points.length-1));const p=historyData.points[historyCursor];$('#history-cursor').value=String(historyCursor);
+ $('#history-inspect').innerHTML=`<strong>${esc(historyTime(p.ts))}</strong> · intervalo de ${historyData.bucketSeconds} s · ${p.samples} amostra(s)<br>TPS mínimo: <strong>${esc(historyNumber(p.tps))}</strong> · CPU média: <strong>${esc(historyNumber(p.cpu))}%</strong> (pico ${esc(historyNumber(p.cpuPeak))}%) · RAM máxima: <strong>${esc(historyMem(p.memory))}</strong> · Jogadores máximos: <strong>${esc(historyNumber(p.players,0))}</strong>`;
+ const {W,L,R}=historyGeometry,start=historyData.points[0].ts,xx=L+(p.ts-start)/Math.max(1,historyData.toTs-start)*(W-L-R);
+ document.querySelectorAll('.history-mark').forEach(line=>{line.setAttribute('x1',xx);line.setAttribute('x2',xx);line.setAttribute('visibility','visible');});
+}
+function historyRender(data){
+ const oldPoint=historyData?.period===data.period?historyData.points[historyCursor]?.ts:null,following=historyCursor===(historyData?.points.length||0)-1;
+ historyData=data;const s=data.summary,age=data.lastTs===null?null:Math.max(0,Math.round(Date.now()/1000-data.lastTs));
+ $('#history-state').textContent=age===null?'Aguardando primeira coleta':age>60?'Última coleta há '+age+' s · verificar coletor':'Última coleta: '+historyTime(data.lastTs);$('#history-state').classList.toggle('history-warning',age!==null&&age>60);
+ $('#history-note').textContent=data.startedTs===null?'O histórico começa após a primeira coleta. Dados anteriores não serão inventados.':'Histórico iniciado em '+historyTime(data.startedTs)+'. '+(s.samples||0)+' amostra(s) neste período. '+(s.missingSamples? s.missingSamples+' leitura(s) parcial(is) ou indisponível(is).':'');
+ $('#history-summary').innerHTML=historyMetric('MENOR TPS EM JOGO',historyNumber(s.activeTpsMin),(s.activeSamples||0)>0?s.activeSamples+' amostras com jogadores':'Ainda sem amostras com jogadores')+historyMetric('PICO DE CPU',historyNumber(s.cpuPeak)+'%','100% equivale a um núcleo')+historyMetric('PICO DE MEMÓRIA',historyMem(s.memoryPeak),'Uso registrado no container')+historyMetric('PICO DE JOGADORES',historyNumber(s.playersPeak,0),'Conexões confirmadas pelo mundo');
+ const configs=[{key:'tps',title:'Ritmo do mundo',note:'TPS mínimo · linha de referência: 18',max:20,color:'#b8e79c',format:v=>historyNumber(v,0)},{key:'cpu',peak:'cpuPeak',title:'Processamento',note:'CPU média · tracejado: pico',minimum:100,color:'#8dc6d8',format:v=>historyNumber(v,0)+'%'},{key:'memory',title:'Memória',note:'Máximo por intervalo',minimum:256,color:'#c7b1e8',format:historyMem},{key:'players',title:'Jogadores conectados',note:'Máximo por intervalo',minimum:1,color:'#dfbc87',format:v=>Number.isInteger(v)?String(v):''}];
+ $('#history-charts').innerHTML=configs.map(historyChart).join('');$('#history-cursor').max=String(Math.max(0,data.points.length-1));$('#history-cursor').disabled=data.points.length<2;$('#history-export').disabled=!data.points.length;
+ if(data.points.length){let selected=data.points.length-1;if(!following&&oldPoint!==null&&oldPoint!==undefined)data.points.forEach((p,i)=>{if(Math.abs(p.ts-oldPoint)<Math.abs(data.points[selected].ts-oldPoint))selected=i;});historyInspect(selected);}else $('#history-inspect').textContent='Sem amostras neste período. A coleta continua com o painel fechado.';
+ $('#history-events').innerHTML=data.events.length?'<div class="history-event head"><span>Horário</span><span>TPS</span><span>Jogadores</span><span>CPU</span><span>RAM</span></div>'+data.events.map(e=>`<div class="history-event"><span>${esc(historyTime(e.ts))}</span><span class="low">${esc(historyNumber(e.tps))}</span><span>${esc(e.players)}</span><span>${esc(historyNumber(e.cpu))}%</span><span>${esc(historyMem(e.memory))}</span></div>`).join(''):'<div class="empty">Nenhuma queda abaixo de 18 TPS registrada com jogadores neste período.</div>';
+ document.querySelectorAll('.history-chart svg').forEach(svg=>svg.addEventListener('pointermove',e=>{if(!historyData.points.length)return;const {W,L,R}=historyGeometry,rect=svg.getBoundingClientRect(),xx=(e.clientX-rect.left)/rect.width*W,start=historyData.points[0].ts,ts=start+(xx-L)/(W-L-R)*(historyData.toTs-start);let best=0;historyData.points.forEach((p,i)=>{if(Math.abs(p.ts-ts)<Math.abs(historyData.points[best].ts-ts))best=i;});historyInspect(best);}));
+}
+async function historyLoad(){if(historyLoading||pending)return;historyLoading=true;$('#history-state').textContent='Consultando histórico…';try{historyRender(await rpc({action:'history',period:historyPeriod}));}catch(e){$('#history-state').textContent='Não foi possível ler o histórico: '+e.message;$('#history-state').classList.add('history-warning');}finally{historyLoading=false;}}
+document.querySelectorAll('[data-history-period]').forEach(b=>b.addEventListener('click',()=>{if(historyLoading)return;historyPeriod=b.dataset.historyPeriod;document.querySelectorAll('[data-history-period]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));historyLoad();}));
+$('#history-cursor').addEventListener('input',e=>historyInspect(Number(e.target.value)));
+$('#history-export').addEventListener('click',async()=>{if(historyLoading||pending)return;try{const r=await rpc({action:'history_export',period:historyPeriod}),url=URL.createObjectURL(new Blob(['\uFEFF'+r.csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=r.filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);}catch(e){notice(e.message,true);}});
+historyLoad();setInterval(historyLoad,60000);

@@ -1,0 +1,11 @@
+'use strict';
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),path=require('node:path');
+const source=fs.readFileSync(path.join(__dirname,'history.js'),'utf8');
+const helper=source.slice(source.indexOf('function historyPath('),source.indexOf('function historyChart('));
+const ctx={};vm.runInNewContext(helper+';this.makePath=historyPath',ctx);
+const make=points=>ctx.makePath(points,'tps',v=>v,v=>v,22.5);
+assert.equal((make([{ts:0,tps:20},{ts:15,tps:19},{ts:30,tps:18}]).match(/M/g)||[]).length,1);
+assert.equal((make([{ts:0,tps:20},{ts:30,tps:20}]).match(/M/g)||[]).length,2,'A missing collection must leave a gap');
+assert.equal((make([{ts:0,tps:20},{ts:15,tps:null},{ts:30,tps:20}]).match(/M/g)||[]).length,2,'Unavailable TPS is not a zero or an interpolated reading');
+assert.match(make([{ts:0,tps:0}]),/M0\.00,0\.00/,'Measured zero must remain visible');
+console.log('4 frontend history checks passed');
