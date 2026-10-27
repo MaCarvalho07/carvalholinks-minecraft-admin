@@ -22,7 +22,8 @@ function render(s){
  const expanded=new Set([...document.querySelectorAll('.player details[open]')].map(d=>d.closest('.player').dataset.player));
  last=s;const b=s.bridge, snap=b.snapshot;const online=b.available?snap.players.length:'—';
  $('#fresh').textContent='Última leitura: '+when(s.at*1000)+' · atualização automática a cada 15 s';
- $('#metrics').innerHTML=metric('SERVIDOR',s.server.state==='running'?'Em execução':s.server.state==='exited'?'Parado':s.server.state,'Saúde: '+s.server.health)+metric('JOGADORES',online+(s.capacity?' / '+s.capacity:''),b.available?'Leitura confirmada pelo mundo':'Aguardando integração do mundo')+metric('CPU',s.metrics.CPUPerc||'—','Uso do container Minecraft')+metric('MEMÓRIA',s.metrics.MemUsage||'—','Disco livre: '+bytes(s.disk.free));
+ const tickNote=b.available&&Number.isFinite(snap?.tickHealth?.tps)?' · TPS estimado: '+snap.tickHealth.tps+' / 20':'';
+ $('#metrics').innerHTML=metric('SERVIDOR',s.server.state==='running'?'Em execução':s.server.state==='exited'?'Parado':s.server.state,'Saúde: '+s.server.health+tickNote)+metric('JOGADORES',online+(s.capacity?' / '+s.capacity:''),b.available?'Leitura confirmada pelo mundo':'Aguardando integração do mundo')+metric('CPU',s.metrics.CPUPerc||'—','Uso do container Minecraft')+metric('MEMÓRIA',s.metrics.MemUsage||'—','Disco livre: '+bytes(s.disk.free));
  $('#world').textContent=s.world;$('#runtime').textContent='Bedrock '+s.server.version+' · '+(s.transport||'transporte padrão')+' · '+s.server.restarts+' reinícios inesperados';
  $('#bridge-state').textContent=b.available?'Integração ativa':snap?'Leitura desatualizada':'Sem leitura do mundo';
  $('#player-list').classList.toggle('stale',!b.available);
@@ -34,7 +35,7 @@ function render(s){
  $('#backup-list').innerHTML=s.backups.map(b=>`<div class="backup"><div><h3>${esc(when(b.created))} · ${esc(bytes(b.bytes))}</h3><p>${esc(reason(b.reason))} · ${esc(b.id)}</p><p>SHA-256: ${esc(b.sha256)}</p></div><div class="actions"><button data-download="${esc(b.id)}">↓ Baixar</button><button data-restore="${esc(b.id)}">Restaurar</button></div></div>`).join('')||'<div class="empty">Crie o primeiro backup pelo painel. Cópias anteriores do servidor continuam preservadas.</div>';
  const warnings=[];
  if(s.errors.length)warnings.push(...s.errors.map(e=>`<div class="diag warn">${esc(e)}</div>`));
- if(s.transport==='raknet'&&s.errors.some(x=>/TRANSPORT|NetherNet/i.test(x)))warnings.unshift(s.connectionVerified?'<div class="diag warn"><strong>Aviso de transporte registrado.</strong> Apesar do aviso de NetherNet, a integração confirmou um jogador conectado nesta execução. O log foi preservado para acompanhamento.</div>':'<div class="diag warn"><strong>Acesso de jogadores ainda não confirmado.</strong> O servidor registra incompatibilidade de transporte. Um ping positivo não confirma que seja possível entrar no mundo.</div>');
+ if(s.transportDiagnostic){const t=s.transportDiagnostic;warnings.unshift(`<div class="diag ${t.severity==='warning'?'warn':''}"><strong>${esc(t.title)}</strong><p class="hint">${esc(t.message)}</p><details><summary>Ver registro original de inicialização</summary><pre class="diagnostic-log">${esc(t.lines.join('\n'))}</pre></details></div>`);}
  if(!b.available)warnings.push('<div class="diag warn">Vida, fome e inventários ainda não validados com um jogador conectado. Nenhum dado de exemplo é exibido.</div>');
  warnings.push(`<div class="diag">Última inicialização: ${esc(when(s.server.started))}. Transporte: ${esc(s.transport)}.</div>`);
  if(b.available)warnings.push('<div class="diag ok">Integração de leitura respondendo. Inventários são somente consulta nesta versão.</div>');

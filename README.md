@@ -6,7 +6,7 @@ This repository contains the first working version of the dashboard and its read
 
 ## Current features
 
-- Server state, health, CPU, memory, and available disk space.
+- Server state, health, CPU, memory, available disk space, and estimated tick rate (TPS).
 - Start, stop, and restart controls for an existing Docker container.
 - Online players, health, hunger, position, dimension, and game mode.
 - Read-only inventory and equipment inspection, including available durability and enchantment information.
@@ -97,6 +97,10 @@ After editing catalog markup fragments, run `python3 build_catalog.py` before de
 The test suite covers ZIP path traversal, symbolic links, invalid archives, nested add-on archives, missing script entry points, pack dependencies, stale telemetry, backup checksums, and restoration into a temporary directory while preserving the runtime configuration.
 
 The initial deployment has also been checked with a real connected player, confirming online status, health, hunger, position, and inventory readings. A backup was created through the dashboard and the server returned to a healthy state.
+
+The bridge estimates TPS from elapsed wall-clock time and `system.currentTick` over 200-tick samples, capped at 20 TPS. This is a server tick-rate estimate, not a network latency measurement or a profiler. An idle world at 20 TPS does not establish that gameplay is smooth under load.
+
+The known NetherNet startup banner is grouped into a collapsible transport diagnostic. It remains a warning until a player connection is observed in the current server run; under RakNet, an observed connection makes it informational. Original records remain intact, and unrelated or interleaved errors remain in the actionable error list. This changes dashboard classification, not the Minecraft binary or its log level. Moving an existing UDP-only tunnel to NetherNet requires a separate networking migration.
 
 Current limits:
 

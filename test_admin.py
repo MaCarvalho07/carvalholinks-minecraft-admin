@@ -3,6 +3,23 @@ if sys.platform=='win32':sys.modules['fcntl']=types.SimpleNamespace()
 spec=importlib.util.spec_from_file_location('admin',pathlib.Path(__file__).with_name('admin.py'));a=importlib.util.module_from_spec(spec);spec.loader.exec_module(a)
 
 class SafetyTests(unittest.TestCase):
+ def banner(self):
+  prefix='[2026-10-26 17:41:03:130 ERROR] '
+  return [prefix+s for s in ['================ TRANSPORT TYPE ERROR ===================','Your current connection type is not set to NetherNet. In this release, NetherNet is the only supported transport type.','Players will not be able to connect to your game without NetherNet.','',"To switch, set 'transport=nethernet' in server.properties.",'For more information, please reference the included bedrock_server_how_to.html file.','=======================================================']]
+ def test_confirmed_transport_is_informational(self):
+  banner=self.banner();errors,note=a.transport_diagnostic(banner,'raknet',True)
+  self.assertEqual(errors,[]);self.assertEqual(note['severity'],'info');self.assertEqual(note['lines'],banner)
+ def test_transport_banner_real_spacing(self):
+  banner=self.banner();banner[0]=banner[0].replace('ERROR ===','ERROR  ===')
+  errors,note=a.transport_diagnostic(banner,'raknet',True)
+  self.assertEqual(errors,[]);self.assertEqual(note['severity'],'info')
+ def test_unconfirmed_transport_still_warns(self):
+  errors,note=a.transport_diagnostic(self.banner(),'raknet',False)
+  self.assertEqual(note['severity'],'warning');self.assertFalse(note['confirmed'])
+ def test_transport_does_not_hide_real_errors(self):
+  banner=self.banner();real='[2026-10-26 17:41:03:130 ERROR] Failed to open LevelDB database'
+  banner.insert(2,real);errors,note=a.transport_diagnostic(banner,'raknet',True)
+  self.assertEqual(errors,[real]);self.assertNotIn(real,note['lines'])
  def test_future_engine(self):
   with self.assertRaises(ValueError):a.validate_engine([dict(name='Future',min_engine=[1,27,0])],'1.26.52.3')
   a.validate_engine([dict(name='Current',min_engine=[1,26,0])],'1.26.52.3')

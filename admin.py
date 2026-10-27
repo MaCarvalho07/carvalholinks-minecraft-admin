@@ -81,6 +81,33 @@ def backup_list():
             out.append(dict(id=p.name,bytes=a.stat().st_size,**json.loads((p/'metadata.json').read_text())))
     return out[:100]
 
+def transport_diagnostic(lines,transport,verified):
+    """Classify only the known startup banner; retain unrelated errors verbatim."""
+    known={
+        'Your current connection type is not set to NetherNet. In this release, NetherNet is the only supported transport type.',
+        'Players will not be able to connect to your game without NetherNet.',
+        "To switch, set 'transport=nethernet' in server.properties.",
+        'For more information, please reference the included bedrock_server_how_to.html file.',
+    }
+    banner=[];errors=[];inside=False
+    for line in lines:
+        message=re.sub(r'^\[[^\]]+\]\s*','',line).strip()
+        if re.fullmatch(r'=+\s+TRANSPORT\s+TYPE\s+ERROR\s+=+',message):
+            inside=True;banner.append(line);continue
+        if inside and (message in known or not message or re.fullmatch(r'=+',message)):
+            banner.append(line)
+            if message and re.fullmatch(r'=+',message):inside=False
+            continue
+        # An interleaved error must never be hidden inside the compatibility notice.
+        errors.append(line)
+    diagnostic=None
+    if banner:
+        confirmed=transport=='raknet' and verified
+        diagnostic=dict(severity='info' if confirmed else 'warning',confirmed=bool(confirmed),lines=banner,
+            title='Transporte legado · entrada confirmada' if confirmed else 'Transporte · entrada ainda não confirmada',
+            message='O servidor usa RakNet e uma entrada foi confirmada nesta execução. O banner de inicialização foi registrado; a migração para NetherNet exige revisar TCP e UDP no túnel.' if confirmed else 'O servidor registrou um aviso de transporte. Confira a configuração e confirme uma entrada real no mundo antes de considerar o acesso validado.')
+    return errors,diagnostic
+
 def status():
     info=inspect(); raw=logs(); b=bridge_data(raw)
     if info['State']['Status']!='running': b['available']=False
@@ -98,7 +125,8 @@ def status():
     connection_verified=(b['available'] and bool(b['snapshot']['players'])) or (remembered.get('started')==info['State']['StartedAt'] and remembered.get('connectionVerified',False))
     atomic(old,dict(started=info['State']['StartedAt'],errors=errors,connectionVerified=connection_verified))
     props=properties(); free=shutil.disk_usage(ROOT)
-    return dict(at=time.time(),connectionVerified=bool(connection_verified),server=dict(state=info['State']['Status'],health=info['State'].get('Health',{}).get('Status','unknown'),started=info['State']['StartedAt'],restarts=info['RestartCount'],version=info['Config'].get('Env',[])),metrics={k:statdata.get(k) for k in ('CPUPerc','MemUsage','MemPerc','NetIO','BlockIO')},world=world().name,capacity=props.get('max-players'),transport=props.get('transport'),disk=dict(free=free.free,total=free.total),bridge=b,packs=packs(),backups=backup_list(),errors=errors[-12:])
+    actionable,transport_note=transport_diagnostic(errors,props.get('transport'),connection_verified)
+    return dict(at=time.time(),connectionVerified=bool(connection_verified),server=dict(state=info['State']['Status'],health=info['State'].get('Health',{}).get('Status','unknown'),started=info['State']['StartedAt'],restarts=info['RestartCount'],version=info['Config'].get('Env',[])),metrics={k:statdata.get(k) for k in ('CPUPerc','MemUsage','MemPerc','NetIO','BlockIO')},world=world().name,capacity=props.get('max-players'),transport=props.get('transport'),transportDiagnostic=transport_note,disk=dict(free=free.free,total=free.total),bridge=b,packs=packs(),backups=backup_list(),errors=actionable[-12:])
 
 def stop():
     active=inspect()['State']['Running']

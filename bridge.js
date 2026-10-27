@@ -20,7 +20,13 @@ function read(p){
  }catch(e){data.error=String(e).slice(0,180);}
  return data;
 }
+let previousSample=null;
 system.runInterval(()=>{
- try{console.warn('[CARV_ADMIN_V1]'+JSON.stringify({schema:1,at:Date.now(),players:world.getAllPlayers().slice(0,10).map(read)}));}
+ try{
+  const at=Date.now(),tick=system.currentTick;
+  const tickHealth=previousSample&&at>previousSample.at?{tps:Math.round(Math.min(20,(tick-previousSample.tick)*1000/(at-previousSample.at))*10)/10,sampleMs:at-previousSample.at}:null;
+  previousSample={at,tick};
+  console.warn('[CARV_ADMIN_V1]'+JSON.stringify({schema:1,at,tickHealth,players:world.getAllPlayers().slice(0,10).map(read)}));
+ }
  catch(e){console.warn('[CARV_ADMIN_ERROR]'+String(e).slice(0,180));}
 },200);
