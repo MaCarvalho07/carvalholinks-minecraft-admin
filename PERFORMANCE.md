@@ -36,7 +36,7 @@ The UI offers 1 hour, 6 hours, 24 hours, 7 days, and 30 days. Its time axis star
 
 The API returns roughly 240 buckets for large datasets. Aggregation preserves the minimum TPS and CPU peak, so brief *recorded* slowdowns are not averaged away. CPU's main line is the sample average, while its dashed line shows the peak. Memory and player charts show maxima. Unknown readings and missing buckets leave gaps in the curves.
 
-The shared time slider supports keyboard inspection, and hovering over a graph selects the nearest recorded bucket. CSV export uses UTC timestamps and explicitly named aggregation columns. It exports the displayed buckets, not a separate stream of raw personal data.
+The shared time slider supports keyboard inspection, and hovering over a graph selects the nearest recorded bucket. CSV export uses UTC timestamps and explicitly named aggregation columns. Select **Exportar CSV** to prepare a file, then use the visible **Baixar CSV** link. It exports the displayed buckets, not a separate stream of raw personal data.
 
 The **lowest gameplay TPS** summary uses only samples with at least one player and a valid TPS reading. TPS dip records show the latest 20 samples below 18 TPS with players connected. These are recorded observations, not alerts or an inferred root cause. An idle world running at 20 TPS does not establish performance under load. A 15-second sampling schedule can also miss short stalls between samples.
 
